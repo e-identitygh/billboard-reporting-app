@@ -1,0 +1,12 @@
+specVersion: "v1beta"
+serviceId: "billboard-reporting-app"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "billboard-reporting-app-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]
