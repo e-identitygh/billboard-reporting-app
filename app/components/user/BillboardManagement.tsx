@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getReports } from '../utils/api';
+import { getReports } from '../../utils/api';
 import { Admin, getAllUsers, getAnalytics, getPendingBillboards } from "@/app/utils/admin";
-import UserManagement from './admin/UserManagement';
-import ContentModeration from './admin/ContentModeration';
-import AnalyticsDashboard from './admin/AnalyticsDashboard';
+import UserManagement from '../admin/UserManagement';
+import ContentModeration from '../admin/ContentModeration';
+import AnalyticsDashboard from '../admin/AnalyticsDashboard';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -28,10 +28,7 @@ export default function AdminDashboard({ user }) {
     const [deleteBillboard, setDeleteBillboard] = useState(null);
     const [successMessage, setSuccessMessage] = useState('');
     const [expandedBillboard, setExpandedBillboard] = useState(null);
-    const [enlargedImage, setEnlargedImage] = useState(null);
-    const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10);
+    const [imageGallery, setImageGallery] = useState({ open: false, images: [], currentIndex: 0 });
 
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
@@ -78,7 +75,6 @@ export default function AdminDashboard({ user }) {
                 billboard.description.toLowerCase().includes(filter.toLowerCase())
         );
         setFilteredBillboards(filtered);
-        setCurrentPage(1);
     }, [billboards, filter]);
 
     useEffect(() => {
@@ -206,34 +202,31 @@ export default function AdminDashboard({ user }) {
         setDeleteConfirm(false);
     };
 
-    const handleImageClick = (imageUrls) => {
-        setEnlargedImage(imageUrls);
-        setCurrentImageIndex(0);
+    const openImageGallery = (images, startIndex = 0) => {
+        setImageGallery({ open: true, images, currentIndex: startIndex });
     };
 
-    const handleNextImage = () => {
-        setCurrentImageIndex((prevIndex) => (prevIndex + 1) % enlargedImage.length);
+    const closeImageGallery = () => {
+        setImageGallery({ open: false, images: [], currentIndex: 0 });
     };
 
-    const handlePrevImage = () => {
-        setCurrentImageIndex((prevIndex) => (prevIndex - 1 + enlargedImage.length) % enlargedImage.length);
+    const nextImage = () => {
+        setImageGallery(prev => ({
+            ...prev,
+            currentIndex: (prev.currentIndex + 1) % prev.images.length
+        }));
     };
 
-    // Pagination
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredBillboards.slice(indexOfFirstItem, indexOfLastItem);
-
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-    const pageNumbers = [];
-    for (let i = 1; i <= Math.ceil(filteredBillboards.length / itemsPerPage); i++) {
-        pageNumbers.push(i);
-    }
+    const prevImage = () => {
+        setImageGallery(prev => ({
+            ...prev,
+            currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+        }));
+    };
 
     return (
-        <div className="space-y-6 p-6 bg-gray-100">
-            <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="space-y-6">
+            <div>
                 <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
                 <div className="mb-6 space-x-4">
                     <Button onClick={() => setActiveTab('users')} className={activeTab === 'users' ? 'bg-primary' : ''}>
@@ -251,8 +244,8 @@ export default function AdminDashboard({ user }) {
                 {activeTab === 'analytics' && <AnalyticsDashboard />}
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <label htmlFor="filter" className="block text-sm font-medium text-gray-700 mb-2">
+            <div>
+                <label htmlFor="filter" className="block text-sm font-medium text-gray-700">
                     Filter Billboards
                 </label>
                 <input
@@ -260,13 +253,12 @@ export default function AdminDashboard({ user }) {
                     id="filter"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="Filter by flag color or report content"
                 />
             </div>
-
             {deleteConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
                     <div className="bg-white p-6 rounded-md shadow-lg max-w-sm">
                         <p className="text-lg font-semibold">Are you sure you want to delete this report?</p>
                         <div className="mt-4 space-x-4">
@@ -288,7 +280,7 @@ export default function AdminDashboard({ user }) {
             )}
 
             {successMessage && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
                     <div className="bg-white p-6 rounded-md shadow-lg max-w-sm">
                         <p className="text-lg font-semibold text-green-600">{successMessage}</p>
                         <div className="mt-4">
@@ -304,15 +296,15 @@ export default function AdminDashboard({ user }) {
             )}
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
-            <div ref={mapRef} className="h-[400px] w-full rounded-lg shadow-md"></div>
+            <div ref={mapRef} style={{ height: '400px', width: '100%' }}></div>
 
-            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
                 <ul className="divide-y divide-gray-200">
-                    {currentItems.map((billboard) => (
+                    {filteredBillboards.map((billboard) => (
                         <li
                             key={billboard.id}
                             onClick={() => handleBillboardClick(billboard)}
-                            className="px-4 py-4 hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
+                            className="px-4 py-4 sm:px-6 hover:bg-gray-50 cursor-pointer"
                         >
                             <div className="flex items-center justify-between">
                                 <p className="text-sm font-medium text-indigo-600 truncate">{billboard.title}</p>
@@ -344,16 +336,16 @@ export default function AdminDashboard({ user }) {
                                         Created At: {new Date(billboard.createdAt.seconds * 1000).toLocaleString()}
                                     </p>
                                     {billboard.imageUrls && billboard.imageUrls.length > 0 && (
-                                        <div className="mt-2 flex space-x-2 overflow-x-auto">
+                                        <div className="mt-2 flex space-x-2">
                                             {billboard.imageUrls.map((url, index) => (
                                                 <img
                                                     key={index}
                                                     src={url}
                                                     alt={`Billboard ${index + 1}`}
-                                                    className="w-20 h-20 object-cover rounded-md cursor-pointer transition-transform hover:scale-105"
+                                                    className="w-20 h-20 object-cover rounded-md cursor-pointer"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleImageClick(billboard.imageUrls);
+                                                        openImageGallery(billboard.imageUrls, index);
                                                     }}
                                                 />
                                             ))}
@@ -375,7 +367,7 @@ export default function AdminDashboard({ user }) {
                                                 e.stopPropagation();
                                                 handleEditClick(billboard);
                                             }}
-                                            className="px-2 py-1 text-xs font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 transition duration-150 ease-in-out"
+                                            className="px-2 py-1 text-xs font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600"
                                         >
                                             Edit
                                         </button>
@@ -384,7 +376,7 @@ export default function AdminDashboard({ user }) {
                                                 e.stopPropagation();
                                                 handleDeleteClick(billboard);
                                             }}
-                                            className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition duration-150 ease-in-out"
+                                            className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded-md hover:bg-red-600"
                                         >
                                             Delete
                                         </button>
@@ -396,63 +388,27 @@ export default function AdminDashboard({ user }) {
                 </ul>
             </div>
 
-            <div className="flex justify-center mt-4 space-x-2">
-                <button
-                    onClick={() => paginate(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                    Previous
-                </button>
-                {pageNumbers.map((number) => (
-                    <button
-                        key={number}
-                        onClick={() => paginate(number)}
-                        className={`px-4 py-2 text-sm font-medium ${
-                            currentPage === number
-                                ? 'text-blue-600 bg-blue-50'
-                                : 'text-gray-700 bg-white hover:bg-gray-50'
-                        } border border-gray-300 rounded-md`}
-                    >
-                        {number}
-                    </button>
-                ))}
-                <button
-                    onClick={() => paginate(currentPage + 1)}
-                    disabled={currentPage === Math.ceil(filteredBillboards.length / itemsPerPage)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                    Next
-                </button>
-            </div>
-
-            <Dialog open={!!enlargedImage} onOpenChange={() => setEnlargedImage(null)}>
+            <Dialog open={imageGallery.open} onOpenChange={closeImageGallery}>
                 <DialogContent className="sm:max-w-[800px]">
-                    {enlargedImage && (
-                        <div className="relative">
-                            <img
-                                src={enlargedImage[currentImageIndex]}
-                                alt={`Enlarged Billboard ${currentImageIndex + 1}`}
-                                className="w-full h-auto"
-                            />
-                            {enlargedImage.length > 1 && (
-                                <>
-                                    <Button
-                                        className="absolute top-1/2 left-2 transform -translate-y-1/2"
-                                        onClick={handlePrevImage}
-                                    >
-                                        <ChevronLeft className="h-6 w-6" />
-                                    </Button>
-                                    <Button
-                                        className="absolute top-1/2 right-2 transform -translate-y-1/2"
-                                        onClick={handleNextImage}
-                                    >
-                                        <ChevronRight className="h-6 w-6" />
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    )}
+                    <div className="relative">
+                        <img
+                            src={imageGallery.images[imageGallery.currentIndex]}
+                            alt={`Billboard ${imageGallery.currentIndex + 1}`}
+                            className="w-full h-auto"
+                        />
+                        <Button
+                            className="absolute top-1/2 left-2 transform -translate-y-1/2"
+                            onClick={prevImage}
+                        >
+                            <ChevronLeft className="h-6 w-6" />
+                        </Button>
+                        <Button
+                            className="absolute top-1/2 right-2 transform -translate-y-1/2"
+                            onClick={nextImage}
+                        >
+                            <ChevronRight className="h-6 w-6" />
+                        </Button>
+                    </div>
                     <DialogClose asChild>
                         <Button className="mt-4">Close</Button>
                     </DialogClose>
@@ -460,7 +416,7 @@ export default function AdminDashboard({ user }) {
             </Dialog>
 
             {editingBillboard && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
                     <div className="bg-white p-6 rounded-md shadow-lg max-w-sm">
                         <h2 className="text-lg font-semibold mb-4">Edit Billboard</h2>
                         <textarea

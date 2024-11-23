@@ -1,63 +1,66 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { auth } from './utils/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
-import Login from './components/Login'
-import BillboardReporting from './components/BillboardReporting'
-import AdminDashboard from './components/AdminDashboard'
-import { logout, getUserRole } from './utils/api'
-import { useToast } from "@/components/ui/toast"
+import { useState, useEffect } from 'react';
+import { auth } from './utils/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import Login from './components/Login';
+import BillboardReporting from './components/BillboardReporting';
+import AdminDashboard from './components/AdminDashboard';
+import { logout, getUserRole, getUserName } from './utils/api';
+import { useToast } from "@/components/ui/toast";
+import UserDashboard from './components/UserDashboard';
 
 // Define the user type
 interface User {
   email: string | null;
   uid: string;
+  name: string | null; // add name to the user type
 }
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null)  // Explicit type for user
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const { showToast } = useToast()
+  const [user, setUser] = useState<User | null>(null); // Explicit type for user
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const role = await getUserRole(currentUser.uid)
-        setUser({ email: currentUser.email, uid: currentUser.uid })  // user now has a valid type
-        setIsAdmin(role === 'admin')
+        const role = await getUserRole(currentUser.uid);
+        const name = await getUserName(currentUser.uid); // fetch user's name along with email and uid
+        setUser({ email: currentUser.email, uid: currentUser.uid, name });  // set user with name
+        setIsAdmin(role === 'admin');
       } else {
-        setUser(null)
-        setIsAdmin(false)
+        setUser(null);
+        setIsAdmin(false);
       }
-      setLoading(false)
-    })
+      setLoading(false);
+    });
 
-    return () => unsubscribe()
-  }, [])
+    return () => unsubscribe();
+  }, []);
 
   const handleLogin = async (userData: User) => {
-    setUser(userData)
-    const role = await getUserRole(userData.uid)
-    setIsAdmin(role === 'admin')
-  }
+    const name = await getUserName(userData.uid); // fetch user's name on login as well
+    setUser({ ...userData, name }); // assign the name property to userData
+    const role = await getUserRole(userData.uid);
+    setIsAdmin(role === 'admin');
+  };
 
   const handleLogout = async () => {
     try {
-      await logout()
-      setUser(null)
-      setIsAdmin(false)
-      showToast("Successfully logged out")
+      await logout();
+      setUser(null);
+      setIsAdmin(false);
+      showToast("Successfully logged out");
     } catch (error) {
-      console.error(error)  // Log the error if you want to see it
-      showToast("Failed to log out. Please try again.")
+      console.error(error); // Log the error if you want to see it
+      showToast("Failed to log out. Please try again.");
     }
-  }
-
+  };
 
   if (loading) {
-    return <div>Loading...</div>
+    return <div>Loading...</div>;
   }
 
   return (
@@ -67,7 +70,10 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-gray-900">Billboard Reporting System</h1>
             {user && (
                 <div className="mt-2 flex items-center justify-between">
-                  <span>Logged in as: {user.email} ({isAdmin ? 'Admin' : 'User'})</span>
+                  <div>
+                    <span>Logged in as: {user.email} ({isAdmin ? 'Admin' : 'User'})</span>
+                    {user.name && <p className="text-sm text-gray-600">Name: {user.name}</p>}
+                  </div>
                   <button
                       onClick={handleLogout}
                       className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
@@ -92,5 +98,5 @@ export default function Home() {
           </div>
         </main>
       </div>
-  )
+  );
 }

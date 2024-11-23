@@ -34,3 +34,46 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+rules_version = '2';
+service firebase.storage {
+match /databases/{database}/documents {
+match /reports/{documentId} {
+allow read, write: if request.auth != null; // Adjust based on your security model
+}
+}
+}
+
+
+service cloud.firestore {
+match /databases/{database}/documents {
+// Allow read/write access to users' own data
+match /users/{userId} {
+allow read, write: if request.auth != null && request.auth.uid == userId;
+allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+
+    }
+
+    // Admin access (e.g., for admin users to read/write to admin data)
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+    
+     match /reports/{reportId} {
+      allow read: if request.auth != null;  // Allow authenticated users to read reports
+      allow write: if request.auth != null; // Allow authenticated users to write reports
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null; // Require authentication for read/write
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+
+    }
+
+}
+}
+}
