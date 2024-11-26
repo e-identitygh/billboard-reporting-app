@@ -30,7 +30,7 @@ export default function AnalyticsDashboard({ analytics = { totalUsers: 0, totalB
             } catch (error) {
                 console.error('Failed to fetch initial analytics data:', error);
                 toast.error('Failed to fetch initial analytics data');
-                if (error.code === 'unavailable') {
+                if ((error as any).code === 'unavailable') {
                     setOffline(true);
                 }
             }
@@ -48,7 +48,7 @@ export default function AnalyticsDashboard({ analytics = { totalUsers: 0, totalB
         } catch (error) {
             console.error('Failed to generate activity report:', error);
             toast.error('Failed to generate activity report');
-            if (error.code === 'unavailable') {
+            if ((error as any).code === 'unavailable') {
                 setOffline(true);
             }
         } finally {

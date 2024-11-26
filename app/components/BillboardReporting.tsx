@@ -33,7 +33,11 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
                 setShowCamera(true);
             }
         } catch (err) {
-            toast.error("Error accessing camera: " + err.message);
+            if (err instanceof Error) {
+                toast.error("Error accessing camera: " + err.message);
+            } else {
+                toast.error("Error accessing camera");
+            }
         }
     };
 
@@ -169,20 +173,22 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
             <div className="container mx-auto p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <Card className="shadow-md p-4 rounded-lg bg-white mb-5" style={{ height: 'calc(100% - 30px)' }}>
+                        <Card className="shadow-md p-4 rounded-lg bg-white mb-5" style={{height: 'calc(100% - 30px)'}}>
                             <CardContent>
-                                <UserDashboard user={user} />
+                                <UserDashboard user={user}/>
                             </CardContent>
                         </Card>
                     </div>
-                    <div>
-                        <Card className="shadow-lg p-8 rounded-lg bg-white">
+                    <div className="flex items-center justify-center min-h-screen p-4 bg-gray-100">
+                        <Card className="shadow-lg p-8 rounded-lg bg-white w-full max-w-lg">
                             <CardContent>
-                                <h2 className="text-4xl font-bold text-center text-gray-800 mb-6">Report a Billboard</h2>
+                                <h2 className="text-3xl sm:text-4xl font-bold text-center text-gray-800 mb-6">Report a
+                                    Billboard</h2>
                                 <form onSubmit={handleSubmit} className="space-y-6">
-                                    <div className="p-4 bg-gray-50 shadow-lg rounded shadow-md">
+                                    <div className="p-4 bg-gray-50 shadow-lg rounded-md space-y-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Report Title</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Report
+                                                Title</label>
                                             <input
                                                 type="text"
                                                 value={title}
@@ -193,11 +199,14 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Billboard Images (Max 4)</label>
-                                            <div className="mt-1 flex flex-wrap items-center space-x-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Billboard
+                                                Images (Max 4)</label>
+                                            <div
+                                                className="mt-1 flex flex-wrap items-center justify-center space-x-2 space-y-2">
                                                 {images.map((image, index) => (
-                                                    <div key={index} className="relative mb-2">
-                                                        <img src={image} alt={`Billboard ${index + 1}`} className="h-32 w-32 object-cover rounded-md"/>
+                                                    <div key={index} className="relative mb-2 w-full sm:w-auto">
+                                                        <img src={image} alt={`Billboard ${index + 1}`}
+                                                             className="h-32 w-full sm:w-32 object-cover rounded-md"/>
                                                         <Button
                                                             type="button"
                                                             variant="destructive"
@@ -213,20 +222,26 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
                                                 {images.length < 4 && (
                                                     <>
                                                         {showCamera ? (
-                                                            <div className="relative">
-                                                                <video ref={videoRef} autoPlay className="h-48 w-64 object-cover rounded-md"/>
-                                                                <div className="absolute bottom-2 left-2 right-2 flex justify-center space-x-2">
-                                                                    <Button type="button" onClick={captureImage}>Capture</Button>
-                                                                    <Button type="button" variant="secondary" onClick={stopCamera}>Cancel</Button>
+                                                            <div className="relative mb-2 w-full sm:w-auto">
+                                                                <video ref={videoRef} autoPlay
+                                                                       className="h-48 w-full sm:w-64 object-cover rounded-md"/>
+                                                                <div
+                                                                    className="absolute bottom-2 left-2 right-2 flex justify-center space-x-2">
+                                                                    <Button type="button"
+                                                                            onClick={captureImage}>Capture</Button>
+                                                                    <Button type="button" variant="secondary"
+                                                                            onClick={stopCamera}>Cancel</Button>
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <div className="h-32 w-32 border-2 border-dashed border-gray-300 flex items-center justify-center rounded-md">
+                                                            <div
+                                                                className="h-32 w-full sm:w-32 border-2 border-dashed border-gray-300 flex items-center justify-center rounded-md">
                                                                 <Camera className="h-8 w-8 text-gray-400"/>
                                                             </div>
                                                         )}
                                                         {!showCamera && (
-                                                            <div className="flex flex-col space-y-2">
+                                                            <div
+                                                                className="flex flex-col items-center space-y-2 w-full sm:w-auto">
                                                                 <Button type="button" onClick={startCamera}>
                                                                     Use Camera
                                                                 </Button>
@@ -254,23 +269,24 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
                                                 )}
                                             </div>
                                             {fileNames.length > 0 && (
-                                                <p className="text-sm text-gray-500 mt-2">
+                                                <p className="text-sm text-gray-500 mt-2 text-center">
                                                     Selected files: {fileNames.join(', ')}
                                                 </p>
                                             )}
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                            <div className="mt-1 flex items-center space-x-4">
+                                            <label
+                                                className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                            <div className="mt-1 flex flex-wrap items-center justify-center space-x-2">
                                                 <Button type="button" onClick={handleGetLocation}>
                                                     <MapPin className="h-5 w-5 mr-2"/>
                                                     Get Current Location
                                                 </Button>
                                                 {coordinates && (
                                                     <span className="text-sm text-gray-500">
-                                                        Lat: {coordinates.lat.toFixed(6)}, Lng: {coordinates.lng.toFixed(6)}
-                                                    </span>
+                                    Lat: {coordinates.lat.toFixed(6)}, Lng: {coordinates.lng.toFixed(6)}
+                                </span>
                                                 )}
                                             </div>
                                         </div>
@@ -285,13 +301,15 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
                                                     <SelectItem value="red">Red (Damaged)</SelectItem>
                                                     <SelectItem value="yellow">Yellow (Needs Attention)</SelectItem>
                                                     <SelectItem value="green">Green (Good Condition)</SelectItem>
-                                                    <SelectItem value="orange">Orange (Next to a competitor)</SelectItem>
+                                                    <SelectItem value="orange">Orange (Next to a
+                                                        competitor)</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Report Description</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Report
+                                                Description</label>
                                             <Textarea
                                                 id="report"
                                                 value={report}
@@ -310,11 +328,11 @@ export default function BillboardReporting({ user = { uid: 'default-uid' } }) {
                                     </div>
                                 </form>
                             </CardContent>
-                            <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
+                            <canvas ref={canvasRef} className="hidden" width="640" height="480"/>
                         </Card>
                     </div>
                 </div>
-                <ToastContainer />
+                <ToastContainer/>
             </div>
         </>
     );

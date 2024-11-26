@@ -45,6 +45,39 @@ export const DialogContent: React.FC<{ children: ReactNode }> = ({ children }) =
     <div className="dialog-content">{children}</div>
 );
 
-export const DialogClose: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-    <button onClick={onClose}>Close</button>
+export const DialogClose: React.FC<{ onClose: () => void, children?: React.ReactNode, asChild?: boolean }> = ({
+                                                                                                                  onClose,
+                                                                                                                  children,
+                                                                                                                  asChild
+                                                                                                              }) => (
+    <button onClick={onClose}>{children || 'Close'}</button>
+);
+
+export const DialogTrigger: React.FC<{ children: ReactNode, asChild?: boolean }> = ({children, asChild}) => (
+    <div className="dialog-trigger">{children}</div>
+);
+
+export const DialogTitle: React.FC<{ children: ReactNode }> = ({ children }) => (
+    <div className="dialog-title">{children}</div>
+);
+
+export const DialogDescription: React.FC<{ children: ReactNode, className?: string }> = ({children, className}) => (
+    <div className="dialog-description">{children}</div>
+);
+
+
+export const DialogOverlay: React.FC<{ children: ReactNode }> = ({ children }) => (
+    <div className="dialog-overlay">{children}</div>
+);
+
+export const DialogHeader: React.FC<{ children: ReactNode }> = ({ children }) => (
+    <div className="dialog-header">{children}</div>
+);
+
+export const DialogPortalRoot: React.FC<{ children: ReactNode }> = ({ children }) => (
+    <div className="dialog-portal-root">{children}</div>
+);
+
+export const DialogPortalTarget: React.FC<{ children: ReactNode }> = ({ children }) => (
+    <div className="dialog-portal-target">{children}</div>
 );

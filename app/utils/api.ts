@@ -100,7 +100,7 @@ export async function getReports() {
         // Add the title or custom sorting logic
         if (reports.length > 0) {
             // Assuming 'title' is a property of the report and we want to move it to the front of the list
-            const titleReport = reports.find(report => report.description.includes("Title")); // Modify condition as needed
+            const titleReport = reports.find(report => (report as Partial<Report>).description?.includes("Title")); // Modify condition as needed
             if (titleReport) {
                 reports = [titleReport, ...reports.filter(report => report.id !== titleReport.id)];
             }
@@ -108,7 +108,11 @@ export async function getReports() {
 
         return reports;
     } catch (error) {
-        throw new Error(error.message);
+        if (error instanceof Error) {
+            throw new Error(error.message);
+        } else {
+            throw new Error('An unknown error occurred while fetching reports.');
+        }
     }
 }
 

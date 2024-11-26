@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "react-toastify"
 
-export default function ProfileManagement({ userId }) {
+export default function ProfileManagement({ userId }: { userId: string }) {
     const [profile, setProfile] = useState({ name: '', email: '' })
     const [newPassword, setNewPassword] = useState('')
 
@@ -17,13 +17,15 @@ export default function ProfileManagement({ userId }) {
     const fetchUserProfile = async () => {
         try {
             const userProfile = await getUserProfile(userId)
-            setProfile(userProfile)
+            if (userProfile) {
+                setProfile(userProfile as { name: string; email: string })
+            }
         } catch (error) {
             toast.error('Failed to fetch user profile')
         }
     }
 
-    const handleUpdateProfile = async (e) => {
+    const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
             await updateUserProfile(userId, { name: profile.name, email: profile.email })
@@ -33,7 +35,7 @@ export default function ProfileManagement({ userId }) {
         }
     }
 
-    const handleChangePassword = async (e) => {
+    const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
             await changePassword(userId, newPassword)

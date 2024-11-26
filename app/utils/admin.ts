@@ -1,5 +1,13 @@
 import { db } from './firebase'
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, getDoc } from 'firebase/firestore'
+
+
+// Fetches reports for a specific user
+export const getUserReports = async (userId: string) => {
+    const reportsQuery = query(collection(db, 'reports'), where('userId', '==', userId));
+    const reportsSnapshot = await getDocs(reportsQuery);
+    return reportsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
 
 // Fetch all users
 export const getAllUsers = async () => {
@@ -32,7 +40,6 @@ export const deleteUser = async (userId: string) => {
         throw error;
     }
 };
-
 
 // Fetch all pending billboards
 export const getPendingBillboards = async () => {
@@ -104,3 +111,30 @@ export class Admin {
         }
     }
 }
+
+// Fetch user details
+export const getUserDetails = async (userId: string) => {
+    try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+            return { id: userDoc.id, ...userDoc.data() };
+        } else {
+            throw new Error('User not found');
+        }
+    } catch (error) {
+        console.error(`Error fetching user details for ${userId}:`, error);
+        throw error;
+    }
+};
+
+// Fetch user billboards
+export const getUserBillboards = async (userId: string) => {
+    try {
+        const q = query(collection(db, 'billboards'), where('userId', '==', userId));
+        const billboardsSnapshot = await getDocs(q);
+        return billboardsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+        console.error(`Error fetching billboards for user ${userId}:`, error);
+        throw error;
+    }
+};

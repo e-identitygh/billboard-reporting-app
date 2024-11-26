@@ -7,16 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "react-toastify"
 
 export default function ContentModeration() {
-    const [pendingBillboards, setPendingBillboards] = useState([])
+    const [pendingBillboards, setPendingBillboards] = useState<{ id: string; title: string; imageUrl: string; description: string; }[]>([])
 
     useEffect(() => {
-        fetchPendingBillboards()
+        fetchPendingBillboards().then(() => {});
     }, [])
 
     const fetchPendingBillboards = async () => {
         try {
             const billboards = await getPendingBillboards()
-            setPendingBillboards(billboards)
+            setPendingBillboards(billboards.map(billboard => ({
+                id: billboard.id,
+                title: (billboard as any).title || '',
+                imageUrl: (billboard as any).imageUrl || '',
+                description: (billboard as any).description || ''
+            })))
         } catch (error) {
             toast.error('Failed to fetch pending billboards')
         }
@@ -26,23 +31,25 @@ export default function ContentModeration() {
         try {
             await approveBillboard(billboardId)
             toast.success('Billboard approved successfully')
-            fetchPendingBillboards()
+            await fetchPendingBillboards()
         } catch (error) {
             toast.error('Failed to approve billboard')
         }
     }
 
     const handleDeleteBillboard = async (billboardId: string) => {
-        if (window.confirm('Are you sure you want to delete this billboard?')) {
-            try {
-                await deleteBillboard(billboardId)
-                toast.success('Billboard deleted successfully')
-                fetchPendingBillboards()
-            } catch (error) {
-                toast.error('Failed to delete billboard')
+        if (typeof window !== 'undefined') {
+            if (window.confirm('Are you sure you want to delete this billboard?')) {
+                try {
+                    await deleteBillboard(billboardId);
+                    toast.success('Billboard deleted successfully');
+                    await fetchPendingBillboards();
+                } catch (error) {
+                    toast.error('Failed to delete billboard');
+                }
             }
         }
-    }
+    };
 
     return (
         <div>

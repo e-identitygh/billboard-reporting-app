@@ -1,457 +1,365 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { getReports } from '../../utils/api';
-import { Admin, getAllUsers, getAnalytics, getPendingBillboards } from "@/app/utils/admin";
-import UserManagement from '../admin/UserManagement';
-import ContentModeration from '../admin/ContentModeration';
-import AnalyticsDashboard from '../admin/AnalyticsDashboard';
+import React, { useEffect, useState } from 'react';
+import { getUserReports, deleteBillboard } from '../../utils/userApi'; // Adjust the import path as needed
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {X as CloseIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dialog } from "@/components/ui/dialog";
+import { doc, updateDoc } from "firebase/firestore";
+import {db} from "@/app/utils/firebase"; // Import named exports properly
 
-export default function AdminDashboard({ user }) {
-    const [activeTab, setActiveTab] = useState('users');
-    const [billboards, setBillboards] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [pendingBillboards, setPendingBillboards] = useState([]);
-    const [analytics, setAnalytics] = useState({});
-    const [filter, setFilter] = useState('');
-    const [error, setError] = useState('');
-    const [filteredBillboards, setFilteredBillboards] = useState([]);
-    const [editingBillboard, setEditingBillboard] = useState(null);
-    const [newDescription, setNewDescription] = useState('');
-    const [newFlag, setNewFlag] = useState('');
-    const [deleteConfirm, setDeleteConfirm] = useState(false);
-    const [deleteBillboard, setDeleteBillboard] = useState(null);
-    const [successMessage, setSuccessMessage] = useState('');
-    const [expandedBillboard, setExpandedBillboard] = useState(null);
-    const [imageGallery, setImageGallery] = useState({ open: false, images: [], currentIndex: 0 });
+type Report = {
+    id: string;
+    title?: string;
+    content?: string;
+    imageUrls?: string[];
+    latitude?: number;
+    longitude?: number;
+    flag?: string;
+    description?: string;
+    createdAt?: any;
+};
 
-    const mapRef = useRef(null);
-    const mapInstance = useRef(null);
-    const markersRef = useRef({});
+interface Billboard {
+    id: string;
+    title: string;
+    content: string;
+    imageUrls: string[];
+    latitude: number;
+    longitude: number;
+    flag: string;
+    description: string;
+    createdAt: any;
+}
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+interface BillboardManagementProps {
+    userId: string;
+}
 
-    const fetchData = async () => {
+const BillboardManagement: React.FC<BillboardManagementProps> = ({ userId }) => {
+    const [billboards, setBillboards] = useState<Billboard[]>([]);
+    const [expandedReport, setExpandedReport] = useState<string | null>(null);
+    const [editingReport, setEditingReport] = useState<Billboard | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null);
+    const itemsPerPage = 5;
+
+    const fetchBillboards = async () => {
         try {
-            const [fetchedUsers, fetchedBillboards, fetchedAnalytics] = await Promise.all([
-                getAllUsers(),
-                getPendingBillboards(),
-                getAnalytics()
-            ]);
-            setUsers(fetchedUsers);
-            setPendingBillboards(fetchedBillboards);
-            setAnalytics(fetchedAnalytics);
-        } catch (error) {
-            console.error('Error fetching dashboard data:', error);
-            setError(`Error fetching dashboard data: ${error.message}`);
+            setLoading(true);
+            const fetchedBillboards = await getUserReports(userId);
+            const fullBillboards: Billboard[] = fetchedBillboards.map((report: Report) => ({
+                id: report.id,
+                title: report.title || 'Default Title',
+                content: report.content || 'Default Content',
+                imageUrls: report.imageUrls || [],
+                latitude: report.latitude || 0,
+                longitude: report.longitude || 0,
+                flag: report.flag || 'Default Flag',
+                description: report.description || 'Default Description',
+                createdAt: report.createdAt || new Date(),
+            }));
+
+            fullBillboards.sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime());
+            setBillboards(fullBillboards);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error fetching billboards.');
+        } finally {
+            setLoading(false);
         }
-    }
+    };
 
     useEffect(() => {
-        const fetchReports = async () => {
+        fetchBillboards();
+    }, [userId]);
+
+    const handleDeleteConfirm = async () => {
+        if (showDeleteConfirm) {
             try {
-                const reports = await getReports();
-                reports.sort((a, b) => b.createdAt.seconds - a.createdAt.seconds);
-                setBillboards(reports);
-            } catch (error) {
-                setError(`Error fetching reports: ${error.message}`);
+                await deleteBillboard(showDeleteConfirm);
+                await fetchBillboards();
+                setExpandedReport(null);
+                setShowDeleteConfirm(null);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Error deleting billboard.');
             }
-        };
-
-        fetchReports();
-    }, []);
-
-    useEffect(() => {
-        const filtered = billboards.filter(
-            (billboard) =>
-                billboard.flag.includes(filter) ||
-                billboard.description.toLowerCase().includes(filter.toLowerCase())
-        );
-        setFilteredBillboards(filtered);
-    }, [billboards, filter]);
-
-    useEffect(() => {
-        if (mapRef.current) {
-            mapInstance.current = L.map(mapRef.current).setView([40.7128, -74.0060], 4);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance.current);
-
-            Object.values(markersRef.current).forEach((marker) => mapInstance.current.removeLayer(marker));
-            markersRef.current = {};
-
-            filteredBillboards.forEach((billboard) => {
-                const markerColor = getMarkerColor(billboard.flag);
-
-                const icon = L.divIcon({
-                    className: 'custom-marker',
-                    html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                            <circle cx="12" cy="12" r="10" fill="${markerColor}" />
-                        </svg>`,
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 30],
-                    popupAnchor: [0, -30],
-                });
-
-                const popupContent = `
-                    <div>
-                        <h3 class="font-bold">${billboard.title}</h3>
-                        <p>Flag: ${billboard.flag}</p>
-                        <p>Report: ${billboard.description}</p>
-                        ${billboard.imageUrls && billboard.imageUrls.length > 0 ? `
-                            <img src="${billboard.imageUrls[0]}" alt="Billboard Image" style="width: 100%; height: auto; margin-top: 10px;" />
-                        ` : ''}
-                        <p>Created At: ${new Date(billboard.createdAt.seconds * 1000).toLocaleString()}</p>
-                    </div>
-                `;
-
-                const marker = L.marker([billboard.latitude, billboard.longitude], { icon })
-                    .addTo(mapInstance.current)
-                    .bindPopup(popupContent);
-
-                markersRef.current[billboard.id] = marker;
-            });
-
-            return () => {
-                mapInstance.current.remove();
-            };
-        }
-    }, [filteredBillboards]);
-
-    const getMarkerColor = (flag) => {
-        switch (flag) {
-            case 'red': return 'red';
-            case 'yellow': return 'yellow';
-            case 'green': return 'green';
-            case 'orange': return 'orange';
-            default: return 'blue';
         }
     };
 
-    const handleBillboardClick = (billboard) => {
-        setExpandedBillboard(expandedBillboard === billboard.id ? null : billboard.id);
-        if (mapInstance.current && markersRef.current[billboard.id]) {
-            mapInstance.current.setView([billboard.latitude, billboard.longitude], 12);
-            markersRef.current[billboard.id].openPopup();
-        }
-    };
-
-    const generateGoogleMapsLink = (latitude, longitude) => {
-        return `https://www.google.com/maps?q=${latitude},${longitude}`;
-    };
-
-    const handleEditClick = (billboard) => {
-        setEditingBillboard(billboard);
-        setNewDescription(billboard.description);
-        setNewFlag(billboard.flag);
+    const handleEdit = (billboard: Billboard) => {
+        setEditingReport(billboard);
     };
 
     const handleSaveEdit = async () => {
-        if (!newDescription || !newFlag) {
-            alert('Please fill in both the description and flag.');
-            return;
+        if (editingReport) {
+            try {
+                const docRef = doc(db, 'reports', editingReport.id);
+                const { id, ...updatedData } = editingReport;
+                await updateDoc(docRef, updatedData); // Implement this function to save the report data to your backend
+                setEditingReport(null);
+                alert('Report saved successfully');
+                await fetchBillboards(); // Refresh the list of billboards
+            } catch (error) {
+                console.error('Failed to save the report:', error);
+                alert('Failed to save the report');
+            }
         }
+    };
 
-        const updatedData = { description: newDescription, flag: newFlag };
+    const handleNextPage = () => {
+        setCurrentPage((prevPage) => prevPage + 1);
+    };
 
-        try {
-            await Admin.editReport(editingBillboard.id, updatedData);
-            setBillboards((prevBillboards) =>
-                prevBillboards.map((b) =>
-                    b.id === editingBillboard.id ? { ...b, ...updatedData } : b
-                )
+    const handlePreviousPage = () => {
+        setCurrentPage((prevPage) => Math.max(prevPage - 1, 1));
+    };
+
+    const handlePageClick = (pageNumber: number) => {
+        setCurrentPage(pageNumber);
+    };
+
+    const totalPages = Math.ceil(billboards.length / itemsPerPage);
+
+    const currentBillboards = billboards.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const googleMapsLink = (latitude: number, longitude: number) =>
+        `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+    const handlePreviousImage = () => {
+        setCurrentImageIndex((prevIndex) => (prevIndex === 0 ? 0 : prevIndex - 1));
+    };
+
+    const handleNextImage = () => {
+        const currentBillboard = billboards.find((b) => b.id === expandedReport);
+        if (currentBillboard) {
+            setCurrentImageIndex((prevIndex) =>
+                prevIndex === (currentBillboard.imageUrls.length || 1) - 1 ? prevIndex : prevIndex + 1
             );
-            setEditingBillboard(null);
-            setSuccessMessage('Report updated successfully!');
-        } catch (error) {
-            alert(`Failed to update report: ${error.message}`);
         }
     };
 
-    const handleCancelEdit = () => {
-        setEditingBillboard(null);
+    const handlePreviousEnlargedImage = () => {
+        setEnlargedImageIndex((prevIndex) => (prevIndex === null || prevIndex === 0 ? 0 : (prevIndex as number) - 1));
     };
 
-    const handleDeleteClick = (billboard) => {
-        setDeleteBillboard(billboard);
-        setDeleteConfirm(true);
-    };
-
-    const confirmDelete = async () => {
-        if (!deleteBillboard) return;
-
-        try {
-            await Admin.deleteReport(deleteBillboard.id);
-            setBillboards((prevBillboards) =>
-                prevBillboards.filter((b) => b.id !== deleteBillboard.id)
+    const handleNextEnlargedImage = () => {
+        const currentBillboard = billboards.find((b) => b.id === expandedReport);
+        if (currentBillboard && enlargedImageIndex !== null) {
+            setEnlargedImageIndex((prevIndex) =>
+                prevIndex === (currentBillboard.imageUrls.length || 1) - 1 ? prevIndex : (prevIndex as number) + 1
             );
-            setDeleteConfirm(false);
-            setSuccessMessage('Report deleted successfully!');
-        } catch (error) {
-            alert(`Failed to delete report: ${error.message}`);
         }
     };
 
-    const cancelDelete = () => {
-        setDeleteConfirm(false);
+    const handleDoubleClick = (index: number) => {
+        setEnlargedImageIndex(index);
     };
 
-    const openImageGallery = (images, startIndex = 0) => {
-        setImageGallery({ open: true, images, currentIndex: startIndex });
+    const handleCloseEnlargedImage = () => {
+        setEnlargedImageIndex(null);
     };
 
-    const closeImageGallery = () => {
-        setImageGallery({ open: false, images: [], currentIndex: 0 });
-    };
-
-    const nextImage = () => {
-        setImageGallery(prev => ({
-            ...prev,
-            currentIndex: (prev.currentIndex + 1) % prev.images.length
-        }));
-    };
-
-    const prevImage = () => {
-        setImageGallery(prev => ({
-            ...prev,
-            currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
-        }));
-    };
+    if (loading) return <div>Loading...</div>;
+    if (error) return <div>Error: {error}</div>;
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
-                <div className="mb-6 space-x-4">
-                    <Button onClick={() => setActiveTab('users')} className={activeTab === 'users' ? 'bg-primary' : ''}>
-                        User Management
-                    </Button>
-                    <Button onClick={() => setActiveTab('content')} className={activeTab === 'content' ? 'bg-primary' : ''}>
-                        Content Moderation
-                    </Button>
-                    <Button onClick={() => setActiveTab('analytics')} className={activeTab === 'analytics' ? 'bg-primary' : ''}>
-                        Analytics
-                    </Button>
-                </div>
-                {activeTab === 'users' && <UserManagement />}
-                {activeTab === 'content' && <ContentModeration />}
-                {activeTab === 'analytics' && <AnalyticsDashboard />}
+        <div className="max-w-7xl mx-auto p-6 rounded-lg">
+            <div className="flex justify-center items-center mb-6 space-x-4">
+                <h2 className="text-3xl font-semibold">My Billboards</h2>
+                <Button variant="secondary" onClick={fetchBillboards}>
+                    Refresh
+                </Button>
             </div>
-
             <div>
-                <label htmlFor="filter" className="block text-sm font-medium text-gray-700">
-                    Filter Billboards
-                </label>
-                <input
-                    type="text"
-                    id="filter"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Filter by flag color or report content"
-                />
-            </div>
-            {deleteConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-                    <div className="bg-white p-6 rounded-md shadow-lg max-w-sm">
-                        <p className="text-lg font-semibold">Are you sure you want to delete this report?</p>
-                        <div className="mt-4 space-x-4">
-                            <button
-                                onClick={confirmDelete}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600"
+                {expandedReport === null ? (
+                    currentBillboards.length === 0 ? (
+                        <p className="text-center text-gray-500 text-lg">No billboards found.</p>
+                    ) : (
+                        currentBillboards.map((billboard) => (
+                            <Card
+                                key={billboard.id}
+                                className="mb-4 cursor-pointer hover:shadow-lg transition-shadow duration-200"
+                                onClick={() => {
+                                    setExpandedReport(billboard.id);
+                                    setCurrentImageIndex(0);
+                                }}
                             >
-                                Yes, Delete
-                            </button>
-                            <button
-                                onClick={cancelDelete}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-300 rounded-md hover:bg-gray-400"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {successMessage && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-                    <div className="bg-white p-6 rounded-md shadow-lg max-w-sm">
-                        <p className="text-lg font-semibold text-green-600">{successMessage}</p>
-                        <div className="mt-4">
-                            <button
-                                onClick={() => setSuccessMessage('')}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-
-            <div ref={mapRef} style={{ height: '400px', width: '100%' }}></div>
-
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                <ul className="divide-y divide-gray-200">
-                    {filteredBillboards.map((billboard) => (
-                        <li
-                            key={billboard.id}
-                            onClick={() => handleBillboardClick(billboard)}
-                            className="px-4 py-4 sm:px-6 hover:bg-gray-50 cursor-pointer"
-                        >
-                            <div className="flex items-center justify-between">
-                                <p className="text-sm font-medium text-indigo-600 truncate">{billboard.title}</p>
-                                <div className="ml-2 flex-shrink-0 flex">
-                                    <p
-                                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            billboard.flag === 'red'
-                                                ? 'bg-red-100 text-red-800'
-                                                : billboard.flag === 'yellow'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : billboard.flag === 'green'
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : billboard.flag === 'orange'
-                                                            ? 'bg-orange-100 text-orange-800'
-                                                            : ''
-                                        }`}
+                                <CardHeader className="relative flex justify-between items-center">
+                                    <CardTitle className="text-xl font-bold text-gray-800">{billboard.title}</CardTitle>
+                                </CardHeader>
+                            </Card>
+                        ))
+                    )
+                ) : (
+                    billboards.map((billboard) => (
+                        <Card key={billboard.id} className={`mb-4 ${expandedReport === billboard.id ? '' : 'hidden'}`}>
+                            <CardHeader className="relative flex items-center bg-gray-100 p-4 rounded-t-lg">
+                                <CardTitle className="text-xl font-bold text-gray-800 relative ">{billboard.title}</CardTitle>
+                                {expandedReport === billboard.id && (
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="icon"
+                                        className="absolute top-0 right-0 rounded-full"
+                                        onClick={() => setExpandedReport(null)}
                                     >
-                                        {billboard.flag}
-                                    </p>
-                                </div>
-                            </div>
-                            {expandedBillboard === billboard.id && (
-                                <div className="mt-2">
-                                    <p className="text-sm text-gray-500">{billboard.description}</p>
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        Lat: {billboard.latitude.toFixed(6)}, Lng: {billboard.longitude.toFixed(6)}
-                                    </p>
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        Created At: {new Date(billboard.createdAt.seconds * 1000).toLocaleString()}
-                                    </p>
-                                    {billboard.imageUrls && billboard.imageUrls.length > 0 && (
-                                        <div className="mt-2 flex space-x-2">
-                                            {billboard.imageUrls.map((url, index) => (
-                                                <img
-                                                    key={index}
-                                                    src={url}
-                                                    alt={`Billboard ${index + 1}`}
-                                                    className="w-20 h-20 object-cover rounded-md cursor-pointer"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        openImageGallery(billboard.imageUrls, index);
-                                                    }}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="mt-2">
+                                        <CloseIcon className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </CardHeader>
+                            {expandedReport === billboard.id && (
+                                <CardContent className="p-6 bg-white rounded-b-lg flex">
+                                    <div className="flex-1">
+                                        <p className="text-gray-700 mb-2"><strong>Date Created:</strong> {billboard.createdAt.toDate().toLocaleString()}</p>
+                                        <p className="text-gray-700 mb-2"><strong>Flag:</strong> {billboard.flag}</p>
+                                        <p className="text-gray-700 mb-2"><strong>Description:</strong> {billboard.description}</p>
+                                        <p className="text-gray-700 mb-4"><strong>Location:</strong> {billboard.latitude}, {billboard.longitude}</p>
                                         <a
-                                            href={generateGoogleMapsLink(billboard.latitude, billboard.longitude)}
+                                            href={googleMapsLink(billboard.latitude, billboard.longitude)}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-sm text-blue-600 hover:underline"
+                                            className="text-blue-500 underline mb-4 block"
                                         >
                                             View on Google Maps
                                         </a>
+                                        <div className="flex space-x-4 mt-4">
+                                            <Button variant="secondary" onClick={() => handleEdit(billboard)}>Edit</Button>
+                                            <Button variant="destructive" onClick={() => setShowDeleteConfirm(billboard.id)}>Delete</Button>
+                                        </div>
                                     </div>
-                                    <div className="mt-2 space-x-2">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleEditClick(billboard);
-                                            }}
-                                            className="px-2 py-1 text-xs font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteClick(billboard);
-                                            }}
-                                            className="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded-md hover:bg-red-600"
-                                        >
-                                            Delete
-                                        </button>
+                                    <div className="flex-shrink-0 ml-6 relative">
+                                        {billboard.imageUrls && billboard.imageUrls.length ? (
+                                            <div className="relative w-40 h-auto rounded overflow-hidden cursor-pointer" onDoubleClick={() => handleDoubleClick(currentImageIndex)}>
+                                                <img
+                                                    src={billboard.imageUrls[currentImageIndex]}
+                                                    alt={`Billboard ${currentImageIndex + 1}`}
+                                                    className="w-full h-auto rounded"
+                                                />
+                                                {billboard.imageUrls.length > 1 && (
+                                                    <>
+                                                        <Button
+                                                            className="absolute left-0 top-1/2 transform -translate-y-1/2 p-2 bg-white rounded-full shadow-lg"
+                                                            onClick={handlePreviousImage}
+                                                            disabled={currentImageIndex === 0}
+                                                        >
+                                                            <ChevronLeft className="h-6 w-6 text-gray-800" />
+                                                        </Button>
+                                                        <Button
+                                                            className="absolute right-0 top-1/2 transform -translate-y-1/2 p-2 bg-white rounded-full shadow-lg"
+                                                            onClick={handleNextImage}
+                                                            disabled={currentImageIndex === billboard.imageUrls.length - 1}
+                                                        >
+                                                            <ChevronRight className="h-6 w-6 text-gray-800" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-500">No images available.</p>
+                                        )}
                                     </div>
-                                </div>
+                                </CardContent>
                             )}
-                        </li>
+                        </Card>
+                    ))
+                )}
+            </div>
+            <div className="flex flex-col items-center mt-8 space-y-4 sm:flex-row sm:justify-center sm:space-y-0 sm:space-x-4">
+                <Button onClick={handlePreviousPage} disabled={currentPage === 1}>Previous</Button>
+                <div className="flex flex-wrap justify-center space-x-2">
+                    {Array.from({ length: totalPages }, (_, index) => (
+                        <Button
+                            key={index + 1}
+                            onClick={() => handlePageClick(index + 1)}
+                            disabled={currentPage === index + 1}
+                        >
+                            {index + 1}
+                        </Button>
                     ))}
-                </ul>
+                </div>
+                <Button onClick={handleNextPage} disabled={currentPage === totalPages}>Next</Button>
             </div>
 
-            <Dialog open={imageGallery.open} onOpenChange={closeImageGallery}>
-                <DialogContent className="sm:max-w-[800px]">
-                    <div className="relative">
-                        <img
-                            src={imageGallery.images[imageGallery.currentIndex]}
-                            alt={`Billboard ${imageGallery.currentIndex + 1}`}
-                            className="w-full h-auto"
-                        />
-                        <Button
-                            className="absolute top-1/2 left-2 transform -translate-y-1/2"
-                            onClick={prevImage}
-                        >
-                            <ChevronLeft className="h-6 w-6" />
-                        </Button>
-                        <Button
-                            className="absolute top-1/2 right-2 transform -translate-y-1/2"
-                            onClick={nextImage}
-                        >
-                            <ChevronRight className="h-6 w-6" />
-                        </Button>
+            {editingReport && (
+                <Dialog onClose={() => setEditingReport(null)} isOpen={!!editingReport}>
+                    <h2 className="text-xl font-semibold mb-4">Edit Report</h2>
+                    <Input
+                        type="text"
+                        value={editingReport.title}
+                        onChange={(e) => setEditingReport((prev) => ({ ...(prev as Billboard), title: e.target.value }))}
+                        className="mb-4"
+                    />
+                    <Textarea
+                        value={editingReport.description}
+                        onChange={(e) => setEditingReport((prev) => ({ ...(prev as Billboard), description: e.target.value }))}
+                        className="mb-4"
+                    />
+                    <div className="flex space-x-4">
+                        <Button className="bg-green-500 hover:bg-green-600 text-white" onClick={handleSaveEdit}>Save</Button>
+                        <Button variant="secondary" onClick={() => setEditingReport(null)}>Cancel</Button>
                     </div>
-                    <DialogClose asChild>
-                        <Button className="mt-4">Close</Button>
-                    </DialogClose>
-                </DialogContent>
-            </Dialog>
+                </Dialog>
+            )}
 
-            {editingBillboard && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-                    <div className="bg-white p-6 rounded-md shadow-lg max-w-sm">
-                        <h2 className="text-lg font-semibold mb-4">Edit Billboard</h2>
-                        <textarea
-                            className="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none"
-                            rows="4"
-                            value={newDescription}
-                            onChange={(e) => setNewDescription(e.target.value)}
-                        />
-                        <select
-                            className="mt-2 w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none"
-                            value={newFlag}
-                            onChange={(e) => setNewFlag(e.target.value)}
-                        >
-                            <option value="red">Red (Damaged)</option>
-                            <option value="yellow">Yellow (Needs Attention)</option>
-                            <option value="green">Green (Good Condition)</option>
-                            <option value="orange">Orange (Next to a competitor)</option>
-                        </select>
-                        <div className="mt-4 space-x-2">
-                            <button
-                                onClick={handleSaveEdit}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600"
-                            >
-                                Save
-                            </button>
-                            <button
-                                onClick={handleCancelEdit}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-300 rounded-md hover:bg-gray-400"
-                            >
-                                Cancel
-                            </button>
-                        </div>
+            {showDeleteConfirm && (
+                <Dialog onClose={() => setShowDeleteConfirm(null)} isOpen={!!showDeleteConfirm}>
+                    <h2 className="text-xl font-semibold mb-4">Confirm Deletion</h2>
+                    <p className="text-gray-700 mb-6">Are you sure you want to delete this billboard?</p>
+                    <div className="flex space-x-4">
+                        <Button variant="secondary" onClick={() => setShowDeleteConfirm(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleDeleteConfirm}>Confirm</Button>
                     </div>
-                </div>
+                </Dialog>
+            )}
+
+            {enlargedImageIndex !== null && (
+                <Dialog onClose={handleCloseEnlargedImage} isOpen={true}>
+                    <div className="relative flex items-center w-full h-full">
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-0 right-0 rounded-full"
+                            onClick={handleCloseEnlargedImage}
+                        >
+                            <CloseIcon className="h-6 w-6" />
+                        </Button>
+                        {enlargedImageIndex > 0 && (
+                            <Button
+                                className="absolute left-4 top-1/2 transform -translate-y-1/2 p-2 bg-white rounded-full shadow-lg"
+                                onClick={handlePreviousEnlargedImage}
+                            >
+                                <ChevronLeft className="h-6 w-6 text-gray-800" />
+                            </Button>
+                        )}
+                        <img
+                            src={billboards.find((b) => b.id === expandedReport)?.imageUrls[enlargedImageIndex] || ''}
+                            alt={`Enlarged Billboard ${enlargedImageIndex + 1}`}
+                            className="max-w-full max-h-full mx-auto my-0"
+                        />
+                        {enlargedImageIndex < (billboards.find((b) => b.id === expandedReport)?.imageUrls.length || 0) - 1 && (
+                            <Button
+                                className="absolute right-4 top-1/2 transform -translate-y-1/2 p-2 bg-white rounded-full shadow-lg"
+                                onClick={handleNextEnlargedImage}
+                            >
+                                <ChevronRight className="h-6 w-6 text-gray-800" />
+                            </Button>
+                        )}
+                    </div>
+                </Dialog>
             )}
         </div>
     );
-}
+};
+
+export default BillboardManagement;

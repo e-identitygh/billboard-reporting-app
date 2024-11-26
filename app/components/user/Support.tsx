@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "react-toastify"
 
-export default function Support({ userId }) {
+export default function Support({ userId }: { userId: string }) {
     const [message, setMessage] = useState('')
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
             await submitSupportRequest(userId, message)
