@@ -1,18 +1,20 @@
-import {auth, db, storage} from './firebase';
-import {createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut} from 'firebase/auth';
-import {addDoc, collection, doc, getDoc, getDocs, query, setDoc} from 'firebase/firestore';
-import {getDownloadURL, ref, uploadString} from 'firebase/storage';
+import { auth, db, storage } from './firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { addDoc, collection, doc, getDoc, getDocs, query, setDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 
 // Function to register a new user
-export async function register(email: string, password: string) {
+export async function register(email: string, password: string, name: string, phone: string) {
     try {
-        if (!(!email || !password)) {
+        if (!(!email || !password || !name || !phone)) {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             await setDoc(doc(db, 'users', userCredential.user.uid), {
                 email: email,
+                name: name,
+                phone: phone,
                 role: 'user'  // Default role set to 'user'
             });
-            return {user: userCredential.user};
+            return { user: userCredential.user };
         } else {
             throw new Error("Email and password are required.");
         }
@@ -29,7 +31,8 @@ export async function login(email: string, password: string) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const userRole = await getUserRole(userCredential.user.uid);
-        return { user: userCredential.user, role: userRole };
+        const userName = await getUserName(userCredential.user.uid); // fetch user's name
+        return { user: userCredential.user, role: userRole, name: userName };
     } catch (error: unknown) {
         if (error instanceof Error) {
             throw new Error(`Login failed: ${error.message}`);
@@ -63,7 +66,7 @@ interface Report {
 export async function createReport(report: Report, userId: string) {
     try {
         // Upload the image to Firebase Storage
-        const storageRef = ref(storage, `billboards/${Date.now()}`);
+        const storageRef = ref(storage, `reports/${userId}/${Date.now()}`);
         await uploadString(storageRef, report.imageUrl, 'data_url');
         const imageUrl = await getDownloadURL(storageRef);
 
@@ -74,7 +77,7 @@ export async function createReport(report: Report, userId: string) {
             longitude: report.longitude,
             flag: report.flag,
             description: report.description,
-            userId: userId,
+            userId, // Link the report to the specific user
             createdAt: new Date()
         });
 
@@ -97,7 +100,7 @@ export async function getReports() {
         // Add the title or custom sorting logic
         if (reports.length > 0) {
             // Assuming 'title' is a property of the report and we want to move it to the front of the list
-            const titleReport = reports.find(report => report.description.includes("Title")); // Modify condition as needed
+            const titleReport = reports.find(report => (report as Partial<Report>).description?.includes("Title")); // Modify condition as needed
             if (titleReport) {
                 reports = [titleReport, ...reports.filter(report => report.id !== titleReport.id)];
             }
@@ -105,7 +108,11 @@ export async function getReports() {
 
         return reports;
     } catch (error) {
-        throw new Error(error.message);
+        if (error instanceof Error) {
+            throw new Error(error.message);
+        } else {
+            throw new Error('An unknown error occurred while fetching reports.');
+        }
     }
 }
 
@@ -120,6 +127,20 @@ export async function getUserRole(userId: string): Promise<string> {
     } catch (error) {
         console.error("Error fetching user role:", error);
         return 'user';
+    }
+}
+
+// Fetch the name of a user from Firestore
+export async function getUserName(userId: string): Promise<string | null> {
+    try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+            return userDoc.data().name || null;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching user name:", error);
+        return null;
     }
 }
 
